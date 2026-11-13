@@ -1,0 +1,299 @@
+diff -ruN a/submodules/AccountContext/Sources/ContactSelectionController.swift b/submodules/AccountContext/Sources/ContactSelectionController.swift
+--- a/submodules/AccountContext/Sources/ContactSelectionController.swift	2026-11-13 19:57:05
++++ b/submodules/AccountContext/Sources/ContactSelectionController.swift	2026-11-13 19:57:48
+@@ -30,18 +30,21 @@
+     public let style: Style
+     public let action: () -> Void
+     public let clearHighlightAutomatically: Bool
++    /// Trailing image drawn before a disclosure arrow (e.g. stacked peer avatars).
++    public let accessoryImage: UIImage?
+     
+-    public init(title: String, subtitle: String? = nil, icon: ContactListActionItemIcon, style: Style = .accent, action: @escaping () -> Void, clearHighlightAutomatically: Bool = false) {
++    public init(title: String, subtitle: String? = nil, icon: ContactListActionItemIcon, style: Style = .accent, action: @escaping () -> Void, clearHighlightAutomatically: Bool = false, accessoryImage: UIImage? = nil) {
+         self.title = title
+         self.subtitle = subtitle
+         self.icon = icon
+         self.style = style
+         self.action = action
+         self.clearHighlightAutomatically = clearHighlightAutomatically
++        self.accessoryImage = accessoryImage
+     }
+     
+     public static func ==(lhs: ContactListAdditionalOption, rhs: ContactListAdditionalOption) -> Bool {
+-        return lhs.title == rhs.title && lhs.subtitle == rhs.subtitle && lhs.icon == rhs.icon && lhs.style == rhs.style
++        return lhs.title == rhs.title && lhs.subtitle == rhs.subtitle && lhs.icon == rhs.icon && lhs.style == rhs.style && lhs.accessoryImage === rhs.accessoryImage
+     }
+ }
+ 
+diff -ruN a/submodules/ContactListUI/Sources/ContactListActionItem.swift b/submodules/ContactListUI/Sources/ContactListActionItem.swift
+--- a/submodules/ContactListUI/Sources/ContactListActionItem.swift	2026-11-13 19:57:05
++++ b/submodules/ContactListUI/Sources/ContactListActionItem.swift	2026-11-13 19:57:48
+@@ -37,6 +37,7 @@
+     let clearHighlightAutomatically: Bool
+     let accessible: Bool
+     let hideBackground: Bool
++    let accessoryImage: UIImage?
+     let action: () -> Void
+     public let header: ListViewItemHeader?
+ 
+@@ -44,8 +45,9 @@
+         return AnyEquatable(HeaderNeighborDescriptor(headerId: self.header?.id, headerFamily: .contactList))
+     }
+     
+-    public init(presentationData: ItemListPresentationData, style: ItemListStyle = .plain, systemStyle: ItemListSystemStyle = .legacy, title: String, subtitle: String? = nil, icon: ContactListActionItemIcon, actionStyle: Style = .accent, height: Height = .generic, highlight: ContactListActionItemHighlight = .cell, clearHighlightAutomatically: Bool = true, accessible: Bool = true, hideBackground: Bool = false, header: ListViewItemHeader?, action: @escaping () -> Void) {
++    public init(presentationData: ItemListPresentationData, style: ItemListStyle = .plain, systemStyle: ItemListSystemStyle = .legacy, title: String, subtitle: String? = nil, icon: ContactListActionItemIcon, actionStyle: Style = .accent, height: Height = .generic, highlight: ContactListActionItemHighlight = .cell, clearHighlightAutomatically: Bool = true, accessible: Bool = true, hideBackground: Bool = false, accessoryImage: UIImage? = nil, header: ListViewItemHeader?, action: @escaping () -> Void) {
+         self.hideBackground = hideBackground
++        self.accessoryImage = accessoryImage
+         self.presentationData = presentationData
+         self.style = style
+         self.systemStyle = systemStyle
+@@ -142,6 +144,8 @@
+     private let maskNode: ASImageNode
+     
+     private let iconNode: ASImageNode
++    private let accessoryNode: ASImageNode
++    private let arrowNode: ASImageNode
+     private let titleNode: TextNode
+     private let subtitleNode: TextNode
+     
+@@ -178,6 +182,14 @@
+         self.iconNode.displayWithoutProcessing = true
+         self.iconNode.displaysAsynchronously = false
+         
++        self.accessoryNode = ASImageNode()
++        self.accessoryNode.isLayerBacked = true
++        self.accessoryNode.displaysAsynchronously = false
++        
++        self.arrowNode = ASImageNode()
++        self.arrowNode.isLayerBacked = true
++        self.arrowNode.displaysAsynchronously = false
++        
+         self.highlightedBackgroundNode = ASDisplayNode()
+         self.highlightedBackgroundNode.isLayerBacked = true
+         
+@@ -189,6 +201,8 @@
+         self.addSubnode(self.iconNode)
+         self.addSubnode(self.titleNode)
+         self.addSubnode(self.subtitleNode)
++        self.addSubnode(self.accessoryNode)
++        self.addSubnode(self.arrowNode)
+         self.addSubnode(self.activateArea)
+         
+         self.activateArea.activate = { [weak self] in
+@@ -214,6 +228,13 @@
+                 leftInset += 49.0
+             }
+             
++            // Trailing accessory: image + 8pt + disclosure arrow, 16pt from the edge.
++            let arrowImage = item.accessoryImage != nil ? PresentationResourcesItemList.disclosureArrowImage(item.presentationData.theme) : nil
++            var accessoryWidth: CGFloat = 0.0
++            if let accessoryImage = item.accessoryImage, let arrowImage {
++                accessoryWidth = 16.0 + arrowImage.size.width + 8.0 + accessoryImage.size.width + 8.0
++            }
++            
+             let titleColor: UIColor
+             let titleFont: UIFont
+             switch item.actionStyle {
+@@ -226,11 +247,11 @@
+             }
+             let subtitleFont = Font.regular(floor(item.presentationData.fontSize.itemListBaseFontSize * 13.0 / 17.0))
+             
+-            let (titleLayout, titleApply) = makeTitleLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: item.title, font: titleFont, textColor: titleColor), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: params.width - 10.0 - leftInset - params.rightInset, height: CGFloat.greatestFiniteMagnitude), alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
++            let (titleLayout, titleApply) = makeTitleLayout(TextNodeLayoutArguments(attributedString: NSAttributedString(string: item.title, font: titleFont, textColor: titleColor), backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: params.width - 10.0 - leftInset - params.rightInset - accessoryWidth, height: CGFloat.greatestFiniteMagnitude), alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
+             
+             let subtitleAttributedString = item.subtitle.flatMap { NSAttributedString(string: $0, font: subtitleFont, textColor: item.presentationData.theme.list.itemSecondaryTextColor) }
+             
+-            let (subtitleLayout, subtitleApply) = makeSubtitleLayout(TextNodeLayoutArguments(attributedString: subtitleAttributedString, backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: params.width - 10.0 - leftInset - params.rightInset, height: CGFloat.greatestFiniteMagnitude), alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
++            let (subtitleLayout, subtitleApply) = makeSubtitleLayout(TextNodeLayoutArguments(attributedString: subtitleAttributedString, backgroundColor: nil, maximumNumberOfLines: 1, truncationType: .end, constrainedSize: CGSize(width: params.width - 10.0 - leftInset - params.rightInset - accessoryWidth, height: CGFloat.greatestFiniteMagnitude), alignment: .natural, cutout: nil, insets: UIEdgeInsets()))
+             
+             let subtitleHeightComponent: CGFloat
+             if subtitleAttributedString == nil {
+@@ -355,6 +376,19 @@
+                     
+                     let subtitleFrame = CGRect(origin: CGPoint(x: titleOffset, y: titleFrame.maxY - 1.0), size: subtitleLayout.size)
+                     strongSelf.subtitleNode.frame = subtitleFrame
++                    
++                    if let accessoryImage = item.accessoryImage, let arrowImage {
++                        let arrowFrame = CGRect(origin: CGPoint(x: params.width - params.rightInset - 16.0 - arrowImage.size.width, y: floor((contentSize.height - arrowImage.size.height) / 2.0)), size: arrowImage.size)
++                        strongSelf.arrowNode.image = arrowImage
++                        strongSelf.arrowNode.frame = arrowFrame
++                        strongSelf.accessoryNode.image = accessoryImage
++                        strongSelf.accessoryNode.frame = CGRect(origin: CGPoint(x: arrowFrame.minX - 8.0 - accessoryImage.size.width, y: floor((contentSize.height - accessoryImage.size.height) / 2.0)), size: accessoryImage.size)
++                        strongSelf.accessoryNode.isHidden = false
++                        strongSelf.arrowNode.isHidden = false
++                    } else {
++                        strongSelf.accessoryNode.isHidden = true
++                        strongSelf.arrowNode.isHidden = true
++                    }
+                     
+                     strongSelf.highlightedBackgroundNode.frame = CGRect(origin: CGPoint(x: stripExcessLeft, y: -UIScreenPixel), size: CGSize(width: params.width - stripExcessLeft - stripExcessRight, height: contentSize.height + UIScreenPixel + UIScreenPixel))
+                 }
+diff -ruN a/submodules/ContactListUI/Sources/ContactListNode.swift b/submodules/ContactListUI/Sources/ContactListNode.swift
+--- a/submodules/ContactListUI/Sources/ContactListNode.swift	2026-11-13 19:57:05
++++ b/submodules/ContactListUI/Sources/ContactListNode.swift	2026-11-13 19:57:48
+@@ -158,7 +158,7 @@
+                     style = .generic
+                     height = .tall
+                 }
+-                return ContactListActionItem(presentationData: ItemListPresentationData(presentationData), systemStyle: .glass, title: option.title, subtitle: option.subtitle, icon: option.icon, actionStyle: style, height: height, clearHighlightAutomatically: option.clearHighlightAutomatically, header: header, action: option.action)
++                return ContactListActionItem(presentationData: ItemListPresentationData(presentationData), systemStyle: .glass, title: option.title, subtitle: option.subtitle, icon: option.icon, actionStyle: style, height: height, clearHighlightAutomatically: option.clearHighlightAutomatically, accessoryImage: option.accessoryImage, header: header, action: option.action)
+             case let .header(_, header):
+                 var sectionId: Int32 = 0
+                 var text = ""
+diff -ruN a/submodules/TelegramCore/Sources/TelegramEngine/Peers/AddressNames.swift b/submodules/TelegramCore/Sources/TelegramEngine/Peers/AddressNames.swift
+--- a/submodules/TelegramCore/Sources/TelegramEngine/Peers/AddressNames.swift	2026-11-13 19:57:05
++++ b/submodules/TelegramCore/Sources/TelegramEngine/Peers/AddressNames.swift	2026-11-13 19:58:07
+@@ -639,6 +639,25 @@
+     }
+ }
+ 
++/// Bots the account owns (`bots.getAdminedBots`), with `TelegramUser.subscriberCount` = monthly active users.
++func _internal_adminedBots(account: Account) -> Signal<[Peer], NoError> {
++    let accountPeerId = account.peerId
++    return account.network.request(Api.functions.bots.getAdminedBots())
++    |> map(Optional.init)
++    |> `catch` { _ -> Signal<[Api.User]?, NoError> in
++        return .single(nil)
++    }
++    |> mapToSignal { result -> Signal<[Peer], NoError> in
++        guard let result else {
++            return .single([])
++        }
++        return account.postbox.transaction { transaction -> [Peer] in
++            updatePeers(transaction: transaction, accountPeerId: accountPeerId, peers: AccumulatedPeers(users: result))
++            return result.compactMap { transaction.getPeer($0.peerId) }
++        }
++    }
++}
++
+ func _internal_channelsForStories(account: Account) -> Signal<[Peer], NoError> {
+     let accountPeerId = account.peerId
+     return account.postbox.transaction { transaction -> [Peer]? in
+diff -ruN a/submodules/TelegramCore/Sources/TelegramEngine/Peers/TelegramEnginePeers.swift b/submodules/TelegramCore/Sources/TelegramEngine/Peers/TelegramEnginePeers.swift
+--- a/submodules/TelegramCore/Sources/TelegramEngine/Peers/TelegramEnginePeers.swift	2026-11-13 19:57:05
++++ b/submodules/TelegramCore/Sources/TelegramEngine/Peers/TelegramEnginePeers.swift	2026-11-13 19:58:07
+@@ -174,6 +174,13 @@
+             return _internal_adminedPublicChannels(account: self.account, scope: scope)
+         }
+         
++        public func adminedBots() -> Signal<[EnginePeer], NoError> {
++            return _internal_adminedBots(account: self.account)
++            |> map { peers -> [EnginePeer] in
++                return peers.map(EnginePeer.init)
++            }
++        }
++        
+         public func channelsForStories() -> Signal<[EnginePeer], NoError> {
+             return _internal_channelsForStories(account: self.account)
+             |> map { peers -> [EnginePeer] in
+diff -ruN a/submodules/TelegramUI/BUILD b/submodules/TelegramUI/BUILD
+--- a/submodules/TelegramUI/BUILD
++++ b/submodules/TelegramUI/BUILD
+@@ -168,6 +168,7 @@
+         "//submodules/BotPaymentsUI:BotPaymentsUI",
+         "//submodules/LocalAuth:LocalAuth",
+         "//submodules/ContactListUI:ContactListUI",
++        "//submodules/MyChannelsUI:MyChannelsUI",
+         "//submodules/SearchUI:SearchUI",
+         "//submodules/ChatListSearchItemHeader:ChatListSearchItemHeader",
+         "//submodules/ItemListPeerItem:ItemListPeerItem",
+diff -ruN a/submodules/TelegramUI/Sources/ComposeController.swift b/submodules/TelegramUI/Sources/ComposeController.swift
+--- a/submodules/TelegramUI/Sources/ComposeController.swift	2026-11-13 19:57:05
++++ b/submodules/TelegramUI/Sources/ComposeController.swift	2026-11-13 20:00:39
+@@ -15,6 +15,7 @@
+ import TelegramPermissionsUI
+ import AppBundle
+ import DeviceAccess
++import MyChannelsUI
+ 
+ public class ComposeControllerImpl: ViewController, ComposeController {
+     private let context: AccountContext
+@@ -273,6 +274,28 @@
+                     }
+                 })
+             }
++        }
++        
++        self.contactsNode.openMyChannels = { [weak self] section in
++            guard let self else {
++                return
++            }
++            var dismissMyChannels: (() -> Void)?
++            let controller = myChannelsController(context: self.context, initialSection: section, openPeer: { [weak self] peer in
++                dismissMyChannels?()
++                self?.openPeer(peerId: peer.id)
++            }, createChannel: { [weak self] in
++                dismissMyChannels?()
++                self?.contactsNode.openCreateNewChannel?()
++            })
++            dismissMyChannels = { [weak controller] in
++                if let controller {
++                    (controller.navigationController as? NavigationController)?.filterController(controller, animated: false)
++                }
++            }
++            (self.navigationController as? NavigationController)?.pushViewController(controller, completion: { [weak self] in
++                self?.contactsNode.contactListNode.listNode.clearHighlightAnimated(true)
++            })
+         }
+         
+         self.contactsNode.contactListNode.suppressPermissionWarning = { [weak self] in
+diff -ruN a/submodules/TelegramUI/Sources/ComposeControllerNode.swift b/submodules/TelegramUI/Sources/ComposeControllerNode.swift
+--- a/submodules/TelegramUI/Sources/ComposeControllerNode.swift	2026-11-13 19:57:05
++++ b/submodules/TelegramUI/Sources/ComposeControllerNode.swift	2026-11-13 20:00:47
+@@ -9,6 +9,7 @@
+ import SearchUI
+ import ContactListUI
+ import AppBundle
++import MyChannelsUI
+ 
+ final class ComposeControllerNode: ASDisplayNode {
+     let contactListNode: ContactListNode
+@@ -28,6 +29,7 @@
+     var openCreateNewSecretChat: (() -> Void)?
+     var openCreateContact: (() -> Void)?
+     var openCreateNewChannel: (() -> Void)?
++    var openMyChannels: ((MyChannelsSection) -> Void)?
+     
+     private var presentationData: PresentationData
+     private var presentationDataDisposable: Disposable?
+@@ -40,6 +42,7 @@
+         var openCreateNewGroupImpl: (() -> Void)?
+         var openCreateContactImpl: (() -> Void)?
+         var openCreateNewChannelImpl: (() -> Void)?
++        var openMyChannelsImpl: ((MyChannelsSection) -> Void)?
+         
+         let options = [
+             ContactListAdditionalOption(title: self.presentationData.strings.Compose_NewGroup, icon: .generic(UIImage(bundleImageName: "Contact List/CreateGroupActionIcon")!), action: {
+@@ -53,13 +56,18 @@
+             })
+         ]
+         // The contacts follow the sort order the Sort button sets, as the Contacts screen's do.
+-        let presentation = contactsSortOrder(context: context)
+-        |> map { sortOrder -> ContactListPresentation in
++        // My Channels / My Bots follow New Channel when the account owns any.
++        let myChannelsOptions = myChannelsComposeOptions(context: context, open: { section in
++            openMyChannelsImpl?(section)
++        })
++        let presentation = combineLatest(contactsSortOrder(context: context), Signal<[ContactListAdditionalOption], NoError>.single([]) |> then(myChannelsOptions))
++        |> map { sortOrder, myOptions -> ContactListPresentation in
++            let allOptions = options + myOptions
+             switch sortOrder {
+             case .presence:
+-                return .orderedByPresence(options: options)
++                return .orderedByPresence(options: allOptions)
+             case .natural:
+-                return .natural(options: options, includeChatList: false, topPeers: .none)
++                return .natural(options: allOptions, includeChatList: false, topPeers: .none)
+             }
+         }
+         self.contactListNode = ContactListNode(context: context, presentation: presentation, onlyWriteable: false, isGroupInvitation: false, displayPermissionPlaceholder: false)
+@@ -83,6 +91,9 @@
+         }
+         openCreateNewChannelImpl = { [weak self] in
+             self?.openCreateNewChannel?()
++        }
++        openMyChannelsImpl = { [weak self] section in
++            self?.openMyChannels?(section)
+         }
+         
+         self.presentationDataDisposable = (context.sharedContext.presentationData
